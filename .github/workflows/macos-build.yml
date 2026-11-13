@@ -14,6 +14,12 @@ jobs:
           repository: rsevero/mapiah
           ref: v1.0.2
 
+      - name: Disable App Sandbox (so Mapiah can be launched by ThIDE on project files)
+        run: |
+          for f in macos/Runner/Release.entitlements macos/Runner/DebugProfile.entitlements; do
+            [ -f "$f" ] && /usr/libexec/PlistBuddy -c "Set :com.apple.security.app-sandbox false" "$f" && echo "patched $f" && cat "$f"
+          done
+
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -24,11 +30,14 @@ jobs:
       - run: flutter pub get
       - run: flutter build macos --release
 
-      - name: Zip app
+      - name: Verify and zip app
         run: |
           APP=$(find build/macos/Build/Products/Release -maxdepth 1 -name '*.app' | head -1)
           echo "Built: $APP"
-          lipo -info "$APP/Contents/MacOS/"* || true
+          codesign -d --entitlements - "$APP"
+          if codesign -d --entitlements - --xml "$APP" 2>/dev/null | plutil -extract com.apple.security.app-sandbox raw -o - - | grep -q true; then
+            echo "::error::App is still sandboxed"; exit 1
+          fi
           ditto -c -k --keepParent "$APP" Mapiah-macOS.zip
 
       - uses: actions/upload-artifact@v4
