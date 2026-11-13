@@ -1,0 +1,38 @@
+name: macOS build (personal)
+
+on:
+  push:
+    branches: [macos-build]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          repository: rsevero/mapiah
+          ref: v1.0.2
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+
+      - run: flutter --version
+      - run: flutter config --enable-macos-desktop
+      - run: flutter pub get
+      - run: flutter build macos --release
+
+      - name: Zip app
+        run: |
+          APP=$(find build/macos/Build/Products/Release -maxdepth 1 -name '*.app' | head -1)
+          echo "Built: $APP"
+          lipo -info "$APP/Contents/MacOS/"* || true
+          ditto -c -k --keepParent "$APP" Mapiah-macOS.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mapiah-macOS
+          path: Mapiah-macOS.zip
+          retention-days: 7
